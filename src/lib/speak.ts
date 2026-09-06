@@ -1,7 +1,9 @@
-/** Pronunciation helper: prefer China-reachable online audio, then Web Speech. */
+/** Pronunciation helper: China-reachable online audio + SpeechSynthesis fallback. */
 
 let currentAudio: HTMLAudioElement | null = null
 let currentUtterance: SpeechSynthesisUtterance | null = null
+/** Bumped on every stop so in-flight play promises abort cleanly. */
+let playGeneration = 0
 
 /** Youdao dict voice — widely reachable in mainland China. type 1=US, 2=UK. */
 export function youdaoVoiceUrl(word: string, accent: 'us' | 'uk' = 'uk'): string {
@@ -9,9 +11,17 @@ export function youdaoVoiceUrl(word: string, accent: 'us' | 'uk' = 'uk'): string
   return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word.trim())}&type=${type}`
 }
 
+/** Baidu fanyi TTS — useful for Chinese glosses in mainland China. */
+export function baiduTtsUrl(text: string, lan: 'zh' | 'en' = 'zh', spd = 5): string {
+  return `https://fanyi.baidu.com/gettts?lan=${lan}&text=${encodeURIComponent(text.trim())}&spd=${spd}&source=web`
+}
+
 export function cancelSpeech() {
   if (currentAudio) {
     try {
+      currentAudio.onended = null
+      currentAudio.onerror = null
+      currentAudio.onplay = null
       currentAudio.pause()
       currentAudio.removeAttribute('src')
       currentAudio.load()
@@ -26,18 +36,32 @@ export function cancelSpeech() {
   currentUtterance = null
 }
 
-function pickVoice(langPref: 'en-US' | 'en-GB' = 'en-GB'): SpeechSynthesisVoice | null {
+/** Stop all audio/TTS and invalidate in-flight playlist steps. */
+export function stopAllPlayback() {
+  playGeneration += 1
+  cancelSpeech()
+}
+
+export function getPlayGeneration() {
+  return playGeneration
+}
+
+function pickVoice(langPref: string): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null
   const voices = window.speechSynthesis.getVoices()
   if (!voices.length) return null
   const exact = voices.find((v) => v.lang === langPref)
   if (exact) return exact
-  const prefix = voices.find((v) => v.lang?.toLowerCase().startsWith(langPref.slice(0, 2)))
-  return prefix || voices.find((v) => /en/i.test(v.lang)) || null
+  const prefix = langPref.slice(0, 2).toLowerCase()
+  return (
+    voices.find((v) => v.lang?.toLowerCase().startsWith(prefix)) ||
+    voices.find((v) => /en|zh/i.test(v.lang)) ||
+    null
+  )
 }
 
 export type SpeakOptions = {
-  lang?: 'en-US' | 'en-GB'
+  lang?: string
   accent?: 'us' | 'uk'
   rate?: number
   onStart?: () => void
@@ -57,7 +81,7 @@ export function speakWord(text: string, opts: SpeakOptions = {}): boolean {
   u.lang = opts.lang || (opts.accent === 'us' ? 'en-US' : 'en-GB')
   u.rate = opts.rate ?? 0.92
   u.pitch = 1
-  const voice = pickVoice(u.lang as 'en-US' | 'en-GB')
+  const voice = pickVoice(u.lang)
   if (voice) u.voice = voice
 
   u.onstart = () => opts.onStart?.()
@@ -74,7 +98,7 @@ export function speakWord(text: string, opts: SpeakOptions = {}): boolean {
   const voices = window.speechSynthesis.getVoices()
   if (!voices.length) {
     window.speechSynthesis.onvoiceschanged = () => {
-      const v = pickVoice(u.lang as 'en-US' | 'en-GB')
+      const v = pickVoice(u.lang)
       if (v) u.voice = v
       window.speechSynthesis.speak(u)
       window.speechSynthesis.onvoiceschanged = null
@@ -87,7 +111,7 @@ export function speakWord(text: string, opts: SpeakOptions = {}): boolean {
 
 function playRemoteUrl(
   url: string,
-  word: string,
+  fallbackText: string,
   opts: SpeakOptions,
 ): { mode: 'audio' | 'speech' | 'none'; stop: () => void } {
   cancelSpeech()
@@ -106,14 +130,13 @@ function playRemoteUrl(
   audio.onended = () => finish(opts.onEnd)
   audio.onerror = () => {
     finish()
-    // Fall back to browser TTS (may still fail in CN)
-    const ok = speakWord(word, opts)
+    const ok = speakWord(fallbackText, opts)
     if (!ok) opts.onError?.()
   }
 
   void audio.play().catch(() => {
     finish()
-    const ok = speakWord(word, opts)
+    const ok = speakWord(fallbackText, opts)
     if (!ok) opts.onError?.()
   })
 
@@ -149,4 +172,112 @@ export function playWordAudio(
     mode: ok ? 'speech' : 'none',
     stop: cancelSpeech,
   }
+}
+
+export type PlayResult = 'ok' | 'error' | 'aborted'
+
+function wait(ms: number, gen: number): Promise<PlayResult> {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(gen === playGeneration ? 'ok' : 'aborted'), ms)
+  })
+}
+
+/** Play a remote audio URL once; resolves when ended/failed/aborted. */
+export function playUrlOnce(url: string, gen = playGeneration): Promise<PlayResult> {
+  if (typeof Audio === 'undefined' || !url.trim()) return Promise.resolve('error')
+  if (gen !== playGeneration) return Promise.resolve('aborted')
+
+  cancelSpeech()
+  return new Promise((resolve) => {
+    if (gen !== playGeneration) {
+      resolve('aborted')
+      return
+    }
+    const audio = new Audio(url)
+    currentAudio = audio
+    let settled = false
+    const done = (result: PlayResult) => {
+      if (settled) return
+      settled = true
+      if (currentAudio === audio) currentAudio = null
+      resolve(gen !== playGeneration ? 'aborted' : result)
+    }
+    audio.onended = () => done('ok')
+    audio.onerror = () => done('error')
+    void audio.play().catch(() => done('error'))
+  })
+}
+
+/** Speak via Web Speech once. */
+export function speakOnce(
+  text: string,
+  lang: string,
+  rate = 0.95,
+  gen = playGeneration,
+): Promise<PlayResult> {
+  if (!text.trim()) return Promise.resolve('ok')
+  if (typeof window === 'undefined' || !window.speechSynthesis) return Promise.resolve('error')
+  if (gen !== playGeneration) return Promise.resolve('aborted')
+
+  cancelSpeech()
+  return new Promise((resolve) => {
+    if (gen !== playGeneration) {
+      resolve('aborted')
+      return
+    }
+    const u = new SpeechSynthesisUtterance(text.trim())
+    u.lang = lang
+    u.rate = rate
+    const voice = pickVoice(lang)
+    if (voice) u.voice = voice
+    currentUtterance = u
+    let settled = false
+    const done = (result: PlayResult) => {
+      if (settled) return
+      settled = true
+      if (currentUtterance === u) currentUtterance = null
+      resolve(gen !== playGeneration ? 'aborted' : result)
+    }
+    u.onend = () => done('ok')
+    u.onerror = () => done('error')
+    const start = () => window.speechSynthesis.speak(u)
+    if (!window.speechSynthesis.getVoices().length) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v = pickVoice(lang)
+        if (v) u.voice = v
+        window.speechSynthesis.onvoiceschanged = null
+        start()
+      }
+    } else {
+      start()
+    }
+  })
+}
+
+/** English word/phrase: Youdao first, then speech / Baidu en. */
+export async function playEnglish(text: string, accent: 'us' | 'uk' = 'uk'): Promise<PlayResult> {
+  const gen = playGeneration
+  const t = text.trim()
+  if (!t) return 'ok'
+  let r = await playUrlOnce(youdaoVoiceUrl(t, accent), gen)
+  if (r === 'aborted') return r
+  if (r === 'ok') return r
+  r = await playUrlOnce(baiduTtsUrl(t, 'en', 4), gen)
+  if (r === 'aborted' || r === 'ok') return r
+  return speakOnce(t, accent === 'us' ? 'en-US' : 'en-GB', 0.92, gen)
+}
+
+/** Chinese gloss: Baidu TTS first, then zh speech. */
+export async function playChinese(text: string): Promise<PlayResult> {
+  const gen = playGeneration
+  const t = text.trim()
+  if (!t) return 'ok'
+  let r = await playUrlOnce(baiduTtsUrl(t, 'zh', 5), gen)
+  if (r === 'aborted') return r
+  if (r === 'ok') return r
+  return speakOnce(t, 'zh-CN', 0.95, gen)
+}
+
+export async function pauseBetween(ms = 350): Promise<PlayResult> {
+  return wait(ms, playGeneration)
 }

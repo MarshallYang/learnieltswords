@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Pause, Play, RefreshCw } from 'lucide-react'
 import type { AppStore } from '../hooks/useAppState'
 import type { Tier, Word } from '../types'
 import { SpeakButton } from './SpeakButton'
+import { autoplayWordList } from '../lib/autoplayWordbook'
+import { stopAllPlayback } from '../lib/speak'
 import {
   WORDBOOK_PAGE_SIZE,
   loadSeenIds,
@@ -32,6 +34,12 @@ export function WordBook({ store }: { store: AppStore }) {
   const [seen, setSeen] = useState<Set<number>>(() => loadSeenIds())
   const [batch, setBatch] = useState<Word[]>([])
   const [refreshToken, setRefreshToken] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [playIndex, setPlayIndex] = useState<number | null>(null)
+  const [playStep, setPlayStep] = useState<'word' | 'meaning' | 'example' | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const rowRefs = useRef<Map<number, HTMLLIElement>>(new Map())
+  const playRunId = useRef(0)
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
@@ -49,28 +57,87 @@ export function WordBook({ store }: { store: AppStore }) {
     })
   }, [store.words, store.state.cards, q, tier, statusFilter])
 
+  const stopPlay = useCallback(() => {
+    playRunId.current += 1
+    stopAllPlayback()
+    setPlaying(false)
+    setPlayIndex(null)
+    setPlayStep(null)
+  }, [])
+
   const reshuffle = useCallback(
     (pool: Word[], currentSeen: Set<number>) => {
+      stopPlay()
       const { batch: next, nextSeen } = sampleWordBatch(pool, currentSeen, WORDBOOK_PAGE_SIZE)
       setBatch(next)
       setSeen(nextSeen)
       saveSeenIds(nextSeen)
       setExpandedId(null)
     },
-    [],
+    [stopPlay],
   )
 
-  // Resample when filters change or manual refresh
   useEffect(() => {
     reshuffle(filtered, seen)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only resample on filter/refresh; seen intentionally omitted to avoid loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, refreshToken, reshuffle])
+
+  // Leave wordbook tab / unmount → stop continuous play
+  useEffect(() => {
+    return () => {
+      playRunId.current += 1
+      stopAllPlayback()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (playIndex == null) return
+    const w = batch[playIndex]
+    if (!w) return
+    const el = rowRefs.current.get(w.id)
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [playIndex, playStep, batch])
 
   const onRefresh = () => {
     setRefreshToken((n) => n + 1)
   }
 
+  const toggleAutoplay = async () => {
+    if (playing) {
+      stopPlay()
+      return
+    }
+    if (batch.length === 0) return
+    const runId = ++playRunId.current
+    setPlaying(true)
+    await autoplayWordList(batch, {
+      onWordStart: (index) => {
+        if (runId !== playRunId.current) return
+        setPlayIndex(index)
+        setExpandedId(batch[index]?.id ?? null)
+      },
+      onStep: (_index, step) => {
+        if (runId !== playRunId.current) return
+        setPlayStep(step)
+      },
+      onDone: () => {
+        if (runId !== playRunId.current) return
+        setPlaying(false)
+        setPlayIndex(null)
+        setPlayStep(null)
+      },
+      onAbort: () => {
+        if (runId !== playRunId.current) return
+        setPlaying(false)
+        setPlayIndex(null)
+        setPlayStep(null)
+      },
+    })
+  }
+
   const unseenLeft = filtered.filter((w) => !seen.has(w.id)).length
+  const stepLabel =
+    playStep === 'word' ? '读单词' : playStep === 'meaning' ? '读释义' : playStep === 'example' ? '读例句' : ''
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -97,29 +164,62 @@ export function WordBook({ store }: { store: AppStore }) {
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-slate-500">
             显示 {batch.length} / 筛选 {filtered.length} · 未展示约 {unseenLeft}
+            {playing && playIndex != null ? (
+              <span className="text-brand-700 dark:text-brand-300">
+                {' '}
+                · 播放 {playIndex + 1}/{batch.length}
+                {stepLabel ? ` · ${stepLabel}` : ''}
+              </span>
+            ) : null}
           </p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="tap-active inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            刷新 {WORDBOOK_PAGE_SIZE} 词
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void toggleAutoplay()}
+              disabled={batch.length === 0}
+              className={`tap-active inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium ${
+                playing
+                  ? 'bg-brand-600 text-white'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+              }`}
+            >
+              {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              {playing ? '停止连播' : '连续播放'}
+            </button>
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="tap-active inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              刷新 {WORDBOOK_PAGE_SIZE} 词
+            </button>
+          </div>
         </div>
       </div>
 
-      <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-        {batch.map((w) => {
+      <ul
+        ref={listRef}
+        className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900"
+      >
+        {batch.map((w, index) => {
           const card = store.state.cards[w.id]
           const st = card?.status ?? 'new'
           const open = expandedId === w.id
           const example = w.exampleEn?.trim()
+          const active = playing && playIndex === index
           return (
-            <li key={w.id} className="px-3 py-2.5">
+            <li
+              key={w.id}
+              ref={(el) => {
+                if (el) rowRefs.current.set(w.id, el)
+                else rowRefs.current.delete(w.id)
+              }}
+              className={`px-3 py-2.5 ${active ? 'bg-brand-50 dark:bg-brand-950/40' : ''}`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <button
                   type="button"
@@ -129,6 +229,11 @@ export function WordBook({ store }: { store: AppStore }) {
                   <p className="font-semibold">
                     {w.word}{' '}
                     {w.pos && <span className="text-xs font-normal text-slate-400">{w.pos}</span>}
+                    {active && stepLabel ? (
+                      <span className="ml-2 text-[10px] font-medium text-brand-700 dark:text-brand-300">
+                        {stepLabel}
+                      </span>
+                    ) : null}
                   </p>
                   {w.phonetic && <p className="font-mono text-xs text-slate-400">{w.phonetic}</p>}
                   <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{w.meaningZh}</p>

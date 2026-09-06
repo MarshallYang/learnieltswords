@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Volume2 } from 'lucide-react'
-import { cancelSpeech, playWordAudio } from '../lib/speak'
+import { cancelSpeech, playWordAudio, stopAllPlayback } from '../lib/speak'
 
 type Props = {
   word: string
@@ -32,6 +32,7 @@ export function SpeakButton({ word, audioUrl, className = '', label = '朗读' }
     e.preventDefault()
     if (speaking) {
       stopRef.current?.()
+      stopAllPlayback()
       cancelSpeech()
       setSpeaking(false)
       return
