@@ -87,7 +87,7 @@ export function StudySession({ store, onDone }: { store: AppStore; onDone: () =>
   const example = word.exampleEn?.trim()
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-none flex-col gap-4 md:max-w-xl">
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span>
           {index + 1} / {total}

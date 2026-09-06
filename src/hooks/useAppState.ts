@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import wordsData from '../data/words.json'
 import type { AppState, Rating, Word, CardProgress } from '../types'
-import { applyTheme, loadState, saveState, resetProgress } from '../lib/storage'
+import {
+  applyTheme,
+  downloadProgressFile,
+  getActiveUser,
+  importProgressFromFile,
+  listUsers,
+  loadState,
+  resetProgress,
+  saveState,
+  switchUser,
+} from '../lib/storage'
 import { createNewCard, isDue, schedule, todayKey } from '../lib/srs'
 
 const words = wordsData as Word[]
 
 export function useAppState() {
-  const [state, setState] = useState<AppState>(() => loadState())
+  const [username, setUsername] = useState(() => getActiveUser())
+  const [state, setState] = useState<AppState>(() => loadState(getActiveUser()))
+  const [users, setUsers] = useState<string[]>(() => listUsers())
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -17,9 +29,9 @@ export function useAppState() {
 
   useEffect(() => {
     if (!ready) return
-    saveState(state)
+    saveState(state, username)
     applyTheme(state.settings.theme)
-  }, [state, ready])
+  }, [state, ready, username])
 
   const wordMap = useMemo(() => {
     const m = new Map<number, Word>()
@@ -104,12 +116,35 @@ export function useAppState() {
     updateSettings({ onboardingDone: true })
   }, [updateSettings])
 
-  const doReset = useCallback((keepSettings = true) => {
-    setState(resetProgress(keepSettings))
+  const doReset = useCallback(
+    (keepSettings = true) => {
+      setState(resetProgress(keepSettings, username))
+    },
+    [username],
+  )
+
+  const changeUser = useCallback((name: string) => {
+    const next = switchUser(name)
+    setUsername(getActiveUser())
+    setState(next)
+    setUsers(listUsers())
+  }, [])
+
+  const exportProgress = useCallback(() => {
+    downloadProgressFile(username, state)
+  }, [username, state])
+
+  const importProgress = useCallback(async (file: File) => {
+    const { username: u, state: s } = await importProgressFromFile(file)
+    setUsername(u)
+    setState(s)
+    setUsers(listUsers())
   }, [])
 
   return {
     ready,
+    username,
+    users,
     state,
     words,
     wordMap,
@@ -124,6 +159,9 @@ export function useAppState() {
     updateSettings,
     finishOnboarding,
     doReset,
+    changeUser,
+    exportProgress,
+    importProgress,
   }
 }
 

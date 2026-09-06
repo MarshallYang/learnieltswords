@@ -22,7 +22,7 @@ export function Layout({
 }) {
   const bookMode = tab === 'book'
   return (
-    <div className="mx-auto flex h-full max-w-lg flex-col">
+    <div className="mx-auto flex h-full max-w-xl flex-col">
       <header className="shrink-0 border-b border-slate-200/80 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white shadow-sm">
@@ -44,7 +44,7 @@ export function Layout({
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-        <div className="mx-auto flex max-w-lg justify-around px-2 py-2">
+        <div className="mx-auto flex max-w-xl justify-around px-2 py-2">
           {tabs.map(({ id, label, icon: Icon }) => {
             const active = tab === id
             return (
