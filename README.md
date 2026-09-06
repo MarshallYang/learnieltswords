@@ -46,7 +46,6 @@ bun run preview
 | 3 认识 | 正常 SM-2 增长 |
 | 4 简单 | 更长间隔，ease 上升 |
 
-当 interval 达到 21 天且 repetitions 达到 5 时标记为已掌握。连续打卡按自然日计算。
 
 ## 词库数据 Schema
 
