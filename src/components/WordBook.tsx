@@ -1,7 +1,14 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { RefreshCw } from 'lucide-react'
 import type { AppStore } from '../hooks/useAppState'
-import type { Tier } from '../types'
+import type { Tier, Word } from '../types'
 import { SpeakButton } from './SpeakButton'
+import {
+  WORDBOOK_PAGE_SIZE,
+  loadSeenIds,
+  saveSeenIds,
+  sampleWordBatch,
+} from '../lib/wordbookSample'
 
 const tiers: { id: Tier | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
@@ -22,8 +29,11 @@ export function WordBook({ store }: { store: AppStore }) {
   const [tier, setTier] = useState<Tier | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'learning' | 'review' | 'mastered'>('all')
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [seen, setSeen] = useState<Set<number>>(() => loadSeenIds())
+  const [batch, setBatch] = useState<Word[]>([])
+  const [refreshToken, setRefreshToken] = useState(0)
 
-  const list = useMemo(() => {
+  const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
     return store.words.filter((w) => {
       if (tier !== 'all' && w.tier !== tier) return false
@@ -39,34 +49,71 @@ export function WordBook({ store }: { store: AppStore }) {
     })
   }, [store.words, store.state.cards, q, tier, statusFilter])
 
+  const reshuffle = useCallback(
+    (pool: Word[], currentSeen: Set<number>) => {
+      const { batch: next, nextSeen } = sampleWordBatch(pool, currentSeen, WORDBOOK_PAGE_SIZE)
+      setBatch(next)
+      setSeen(nextSeen)
+      saveSeenIds(nextSeen)
+      setExpandedId(null)
+    },
+    [],
+  )
+
+  // Resample when filters change or manual refresh
+  useEffect(() => {
+    reshuffle(filtered, seen)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only resample on filter/refresh; seen intentionally omitted to avoid loops
+  }, [filtered, refreshToken, reshuffle])
+
+  const onRefresh = () => {
+    setRefreshToken((n) => n + 1)
+  }
+
+  const unseenLeft = filtered.filter((w) => !seen.has(w.id)).length
+
   return (
-    <div className="space-y-3">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="搜索单词 / 释义…"
-        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none ring-brand-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900"
-      />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="shrink-0 space-y-3 bg-slate-50 dark:bg-slate-950">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="搜索单词 / 释义…"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none ring-brand-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900"
+        />
 
-      <div className="flex flex-wrap gap-1.5">
-        {tiers.map((t) => (
-          <Chip key={t.id} active={tier === t.id} onClick={() => setTier(t.id)}>
-            {t.label}
-          </Chip>
-        ))}
+        <div className="flex flex-wrap gap-1.5">
+          {tiers.map((t) => (
+            <Chip key={t.id} active={tier === t.id} onClick={() => setTier(t.id)}>
+              {t.label}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(['all', 'new', 'learning', 'review', 'mastered'] as const).map((s) => (
+            <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+              {s === 'all' ? '全部状态' : statusLabel[s]}
+            </Chip>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">
+            显示 {batch.length} / 筛选 {filtered.length} · 未展示约 {unseenLeft}
+          </p>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="tap-active inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            刷新 {WORDBOOK_PAGE_SIZE} 词
+          </button>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {(['all', 'new', 'learning', 'review', 'mastered'] as const).map((s) => (
-          <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-            {s === 'all' ? '全部状态' : statusLabel[s]}
-          </Chip>
-        ))}
-      </div>
 
-      <p className="text-xs text-slate-500">共 {list.length} 词</p>
-
-      <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-        {list.slice(0, 200).map((w) => {
+      <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+        {batch.map((w) => {
           const card = store.state.cards[w.id]
           const st = card?.status ?? 'new'
           const open = expandedId === w.id
@@ -102,10 +149,7 @@ export function WordBook({ store }: { store: AppStore }) {
             </li>
           )
         })}
-        {list.length > 200 && (
-          <li className="px-3 py-3 text-center text-xs text-slate-400">仅显示前 200 条，请缩小筛选</li>
-        )}
-        {list.length === 0 && (
+        {batch.length === 0 && (
           <li className="px-3 py-8 text-center text-sm text-slate-400">无匹配单词</li>
         )}
       </ul>

@@ -20,9 +20,10 @@ export function Layout({
   onTab: (t: Tab) => void
   children: ReactNode
 }) {
+  const bookMode = tab === 'book'
   return (
-    <div className="mx-auto flex min-h-full max-w-lg flex-col">
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+    <div className="mx-auto flex h-full max-w-lg flex-col">
+      <header className="shrink-0 border-b border-slate-200/80 bg-slate-50/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white shadow-sm">
             IELTS
@@ -34,7 +35,13 @@ export function Layout({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 pb-24 pt-4">{children}</main>
+      <main
+        className={`flex min-h-0 flex-1 flex-col px-4 pb-24 pt-4 ${
+          bookMode ? 'overflow-hidden' : 'overflow-y-auto'
+        }`}
+      >
+        {children}
+      </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
         <div className="mx-auto flex max-w-lg justify-around px-2 py-2">
