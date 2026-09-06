@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:words": "node scripts/build-words.mjs"
+    "build:words": "node scripts/build-words.mjs",
+    "enrich:words": "node scripts/enrich-ielts-examples.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.41.0",

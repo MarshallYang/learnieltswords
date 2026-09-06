@@ -9,6 +9,8 @@ export interface Word {
   meaningZh: string
   pos?: string
   exampleEn?: string
+  /** Optional remote pronunciation URL from dictionary API */
+  audioUrl?: string
   tier: Tier
 }
 
@@ -24,7 +26,7 @@ export interface CardProgress {
 }
 
 export interface Settings {
-  newPerDay: 10 | 15 | 20 | 30
+  newPerDay: 10 | 15 | 20 | 30 | 40 | 50 | 60 | 70
   theme: 'light' | 'dark' | 'system'
   onboardingDone: boolean
 }

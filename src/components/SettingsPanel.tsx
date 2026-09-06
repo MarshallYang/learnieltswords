@@ -1,6 +1,6 @@
 import type { AppStore } from '../hooks/useAppState'
 
-const newOptions = [10, 15, 20, 30] as const
+const newOptions = [10, 15, 20, 30, 40, 50, 60, 70] as const
 const themes = [
   { id: 'light' as const, label: '浅色' },
   { id: 'dark' as const, label: '深色' },

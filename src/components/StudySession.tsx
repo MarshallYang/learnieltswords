@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AppStore } from '../hooks/useAppState'
 import type { Rating, Word } from '../types'
+import { SpeakButton } from './SpeakButton'
 
 type QueueItem = { word: Word; isNew: boolean }
 
@@ -82,7 +83,8 @@ export function StudySession({ store, onDone }: { store: AppStore; onDone: () =>
   }
 
   const { word, isNew } = current
-  const progress = Math.round(((index) / total) * 100)
+  const progress = Math.round((index / total) * 100)
+  const example = word.exampleEn?.trim()
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
@@ -99,7 +101,10 @@ export function StudySession({ store, onDone }: { store: AppStore; onDone: () =>
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="min-h-[200px] text-center">
-          <p className="text-3xl font-bold tracking-wide sm:text-4xl">{word.word}</p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-3xl font-bold tracking-wide sm:text-4xl">{word.word}</p>
+            <SpeakButton word={word.word} audioUrl={word.audioUrl} />
+          </div>
           {word.phonetic && (
             <p className="mt-2 font-mono text-sm text-slate-500 dark:text-slate-400">{word.phonetic}</p>
           )}
@@ -118,13 +123,19 @@ export function StudySession({ store, onDone }: { store: AppStore; onDone: () =>
               显示释义（空格）
             </button>
           ) : (
-            <div className="mt-8 space-y-3 text-left">
-              <p className="text-lg leading-relaxed text-slate-800 dark:text-slate-100">{word.meaningZh}</p>
-              {word.exampleEn && (
-                <p className="rounded-xl bg-slate-50 p-3 text-sm italic text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
-                  {word.exampleEn}
-                </p>
-              )}
+            <div className="mt-8 space-y-4 text-left">
+              <div>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">释义</p>
+                <p className="text-lg leading-relaxed text-slate-800 dark:text-slate-100">{word.meaningZh}</p>
+              </div>
+              {example ? (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-brand-600 dark:text-brand-400">雅思例句</p>
+                  <p className="rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                    {example}
+                  </p>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

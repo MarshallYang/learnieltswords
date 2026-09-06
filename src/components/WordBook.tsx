@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { AppStore } from '../hooks/useAppState'
 import type { Tier } from '../types'
+import { SpeakButton } from './SpeakButton'
 
 const tiers: { id: Tier | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
@@ -20,6 +21,7 @@ export function WordBook({ store }: { store: AppStore }) {
   const [q, setQ] = useState('')
   const [tier, setTier] = useState<Tier | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'learning' | 'review' | 'mastered'>('all')
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const list = useMemo(() => {
     const query = q.trim().toLowerCase()
@@ -67,21 +69,36 @@ export function WordBook({ store }: { store: AppStore }) {
         {list.slice(0, 200).map((w) => {
           const card = store.state.cards[w.id]
           const st = card?.status ?? 'new'
+          const open = expandedId === w.id
+          const example = w.exampleEn?.trim()
           return (
             <li key={w.id} className="px-3 py-2.5">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => setExpandedId(open ? null : w.id)}
+                >
                   <p className="font-semibold">
                     {w.word}{' '}
                     {w.pos && <span className="text-xs font-normal text-slate-400">{w.pos}</span>}
                   </p>
                   {w.phonetic && <p className="font-mono text-xs text-slate-400">{w.phonetic}</p>}
                   <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{w.meaningZh}</p>
+                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <SpeakButton word={w.word} audioUrl={w.audioUrl} className="!p-1.5" />
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    {statusLabel[st]}
+                  </span>
                 </div>
-                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {statusLabel[st]}
-                </span>
               </div>
+              {open && example ? (
+                <div className="mt-2 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60">
+                  <p className="mb-0.5 text-[10px] font-medium text-brand-600 dark:text-brand-400">雅思例句</p>
+                  <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{example}</p>
+                </div>
+              ) : null}
             </li>
           )
         })}

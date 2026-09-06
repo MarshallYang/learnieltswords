@@ -1,0 +1,74 @@
+{
+  "beforeExamples": 774,
+  "afterExamples": 7500,
+  "meaningFixed": 5882,
+  "localGenerated": 6730,
+  "keptExisting": 770,
+  "apiExamples": 0,
+  "audioUrls": 0,
+  "samples": [
+    {
+      "id": 1,
+      "word": "abacus",
+      "pos": "n.",
+      "meaningZh": "n. 算盘",
+      "exampleEn": "Students should analyse how abacus relates to scientific research in Task 2 essays."
+    },
+    {
+      "id": 2,
+      "word": "abandon",
+      "pos": "n.",
+      "meaningZh": "v. 抛弃，遗弃；离开，舍弃；中止，不再有",
+      "exampleEn": "Faced with overwhelming contradictory evidence, the research team was forced to abandon its initial hypothesis regarding the causes of the social phenomenon."
+    },
+    {
+      "id": 3,
+      "word": "abashed",
+      "pos": "adj.",
+      "meaningZh": "adj. 不安的；窘迫的；尴尬的",
+      "exampleEn": "A more abashed approach to environmental protection could reduce long-term risks."
+    },
+    {
+      "id": 101,
+      "word": "acid",
+      "pos": "n.",
+      "meaningZh": "n. 酸；尖刻的言语；质子供体，电子对受体",
+      "exampleEn": "The essay evaluates competing definitions of acid in debates on sustainable agriculture."
+    },
+    {
+      "id": 501,
+      "word": "archeology",
+      "pos": "n.",
+      "meaningZh": "n. 考古学",
+      "exampleEn": "The essay evaluates competing definitions of archeology in debates on social inequality."
+    },
+    {
+      "id": 3001,
+      "word": "dose",
+      "pos": "n.",
+      "meaningZh": "n. 剂量；一剂，一服",
+      "exampleEn": "The essay evaluates competing definitions of dose in debates on public health policy."
+    },
+    {
+      "id": 4501,
+      "word": "kidney",
+      "pos": "n.",
+      "meaningZh": "n. 肾脏；腰子；个性",
+      "exampleEn": "Students should analyse how kidney relates to infrastructure investment in Task 2 essays."
+    },
+    {
+      "id": 6001,
+      "word": "renaissance",
+      "pos": "n.",
+      "meaningZh": "n. 复兴，再生；文艺复兴；文艺复兴文化，文艺复兴风格",
+      "exampleEn": "Discussions of climate change mitigation frequently refer to renaissance as supporting evidence."
+    },
+    {
+      "id": 7500,
+      "word": "zoologist",
+      "pos": "n.",
+      "meaningZh": "n. 动物学家",
+      "exampleEn": "Students should analyse how zoologist relates to infrastructure investment in Task 2 essays."
+    }
+  ]
+}
